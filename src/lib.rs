@@ -52,7 +52,9 @@ impl AbcCustomer {
     /// The data files are long, and ABC does not always produce them correctly. Therefore, if any
     /// required fields are missing or if certain values cannot be parsed,
     /// then an [`ParseCustomerError`] will be returned
-    pub fn from_db_export(customer_path: &str) -> Result<AbcCustomersByCode, ParseCustomerError> {
+    pub fn from_db_export(
+        customer_path: &str,
+    ) -> Result<(AbcCustomersByCode, Vec<AbcCustomerBuilder>), ParseCustomerError> {
         let mut customer_data = csv::ReaderBuilder::new()
             .delimiter(b'\t')
             .has_headers(false)
@@ -60,6 +62,7 @@ impl AbcCustomer {
 
         let mut i = 0;
         let mut customers = HashMap::new();
+        let mut failed = Vec::new();
         while let Some(row) = customer_data.records().next() {
             i += 1;
             let row = row?;
@@ -83,23 +86,28 @@ impl AbcCustomer {
             let tin = row.get(31).map(str::to_string);
             let jdf_id = row.get(36).map(str::to_string);
 
-            customers.insert(
-                code.to_string(),
-                AbcCustomerBuilder::default()
-                    .code(code)
-                    .name(name)
-                    .address(address)
-                    .zip(zip)
-                    .email(email)
-                    .phone(phone)
-                    .terms(terms)
-                    .tax_code(tax)
-                    .jdf_id(jdf_id)
-                    .tin(tin)
-                    .build()?,
-            );
+            let builder = AbcCustomerBuilder::default()
+                .code(code)
+                .name(name)
+                .address(address)
+                .zip(zip)
+                .email(email)
+                .phone(phone)
+                .terms(terms)
+                .tax_code(tax)
+                .jdf_id(jdf_id)
+                .tin(tin)
+                .to_owned();
+            match builder.build() {
+                Ok(c) => {
+                    customers.insert(code.to_string(), c);
+                }
+                Err(_) => {
+                    failed.push(builder);
+                }
+            }
         }
-        Ok(customers)
+        Ok((customers, failed))
     }
 }
 
@@ -138,7 +146,7 @@ mod tests {
     #[test]
     fn test_parser() {
         let customer_path = "./customer.data";
-        let customers = AbcCustomer::from_db_export(customer_path).unwrap();
+        let (customers, failed) = AbcCustomer::from_db_export(customer_path).unwrap();
         assert_eq!(
             customers,
             AbcCustomersByCode::from([
