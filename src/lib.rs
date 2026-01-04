@@ -1,3 +1,4 @@
+// https://apis.usps.com/addresses/v3/city-state
 use derive_builder::Builder;
 use std::collections::HashMap;
 
@@ -6,8 +7,8 @@ use std::collections::HashMap;
 pub struct AbcCustomer {
     code: String,
     name: String,
-    address: Option<String>,
-    zip: Option<String>,
+    address: String,
+    zip: String,
     email: Option<String>,
     #[builder(default = Vec::new())]
     phone: Vec<String>,
@@ -15,6 +16,11 @@ pub struct AbcCustomer {
     tax_code: String,
     tin: Option<String>,
     jdf_id: Option<String>,
+
+    #[builder(setter(skip))]
+    city: String,
+    #[builder(setter(skip))]
+    state: String,
 }
 
 #[derive(Debug)]
@@ -151,16 +157,16 @@ mod tests {
             customers,
             AbcCustomersByCode::from([
                 (
-                    "123456".to_string(),
-                    AbcCustomer::new()
-                        .with_sku("123456")
-                        .with_desc("PRODUCT A")
-                        .add_upc(Gtin::nonstrict_new("85875500014"))
-                        .with_cost(Decimal::new(123, 2))
-                        .with_stock(0.00)
-                        .with_list(Decimal::new(599, 2))
-                        .with_last_sold(NaiveDate::from_str("2024-11-16").unwrap())
-                        .add_alt_sku("ALT")
+                    "SOMECODE".to_string(),
+                    AbcCustomerBuilder::default()
+                        .code("SOMECODE")
+                        .name("SOME COMPANY")
+                        .address(Some("1119 CENTRE AVE".to_string()))
+                        .zip(Some("19601".to_string()))
+                        .phone(["(123)456-7890".to_string()])
+                        .tax_code("PA/")
+                        .terms("NET30")
+                        .tin(Some("123456789".to_string()))
                         .build()
                         .unwrap()
                 ),
