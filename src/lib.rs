@@ -73,19 +73,60 @@ impl AbcCustomer {
             let name = row
                 .get(1)
                 .ok_or(ParseCustomerError::MissingField("name", i))?;
-            let address = row.get(3).map(str::to_string);
-            let zip = row.get(4).map(str::to_string);
-            let email = row.get(6).map(str::to_string);
-            let tax = row.get(11).unwrap_or("PA");
+            let address = row.get(3).map_or(None, |a| {
+                if a.is_empty() {
+                    None
+                } else {
+                    Some(a.to_string())
+                }
+            });
+            let zip = row.get(4).map_or(None, |z| {
+                if z.is_empty() {
+                    None
+                } else {
+                    Some(z.to_string())
+                }
+            });
+            let email = row.get(6).map_or(None, |e| {
+                if e.is_empty() {
+                    None
+                } else {
+                    Some(e.to_string())
+                }
+            });
+            let tax = row
+                .get(11)
+                .map_or("PA", |e| if e.is_empty() { "PA" } else { e });
             // Phone numbers may exist at any of indexes 7, 27, 34
-            let phone: Vec<String> = [7, 27, 34]
+            let phone: Vec<String> = [7usize, 27, 34]
                 .iter()
-                .filter_map(|i| row.get(*i))
-                .map(str::to_string)
+                .filter_map(|i| {
+                    row.get(*i).map_or(None, |s| {
+                        if s.is_empty() {
+                            None
+                        } else {
+                            Some(s.to_string())
+                        }
+                    })
+                })
                 .collect();
-            let terms = row.get(15).unwrap_or("CASH");
-            let tin = row.get(31).map(str::to_string);
-            let jdf_id = row.get(36).map(str::to_string);
+            let terms = row
+                .get(15)
+                .map_or("CASH", |e| if e.is_empty() { "CASH" } else { e });
+            let tin = row.get(31).map_or(None, |e| {
+                if e.is_empty() {
+                    None
+                } else {
+                    Some(e.to_string())
+                }
+            });
+            let jdf_id = row.get(36).map_or(None, |e| {
+                if e.is_empty() {
+                    None
+                } else {
+                    Some(e.to_string())
+                }
+            });
 
             let builder = AbcCustomerBuilder::default()
                 .code(code)
@@ -116,7 +157,7 @@ impl std::fmt::Display for ParseCustomerError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let inner_message = match self {
             Self::MissingField(field, row) => {
-                format!("Missing field `{}` in row {}", field, row)
+                format!("Missing required field `{}` in row {}", field, row)
             }
             Self::CsvError(e) => format!("{}", e),
             Self::BuilderError(e) => format!("{}", e),
