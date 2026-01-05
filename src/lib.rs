@@ -7,8 +7,8 @@ use std::collections::HashMap;
 pub struct AbcCustomer {
     code: String,
     name: String,
-    address: String,
-    zip: String,
+    address: Option<String>,
+    zip: Option<String>,
     email: Option<String>,
     #[builder(default = Vec::new())]
     phone: Vec<String>,
@@ -16,11 +16,6 @@ pub struct AbcCustomer {
     tax_code: String,
     tin: Option<String>,
     jdf_id: Option<String>,
-
-    #[builder(setter(skip))]
-    city: String,
-    #[builder(setter(skip))]
-    state: String,
 }
 
 #[derive(Debug)]
