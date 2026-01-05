@@ -189,39 +189,73 @@ mod tests {
     fn test_parser() {
         let customer_path = "./customer.data";
         let (customers, failed) = AbcCustomer::from_db_export(customer_path).unwrap();
-        assert_eq!(
-            customers,
-            AbcCustomersByCode::from([
-                (
-                    "SOMECODE".to_string(),
-                    AbcCustomerBuilder::default()
-                        .code("SOMECODE")
-                        .name("SOME COMPANY")
-                        .address(Some("1119 CENTRE AVE".to_string()))
-                        .zip(Some("19601".to_string()))
-                        .phone(["(123)456-7890".to_string()])
-                        .tax_code("PA/")
-                        .terms("NET30")
-                        .tin(Some("123456789".to_string()))
-                        .build()
-                        .unwrap()
-                ),
-                (
-                    "ABC123".to_string(),
-                    AbcCustomer::new()
-                        .with_sku("ABC123")
-                        .with_desc("PRODUCT B")
-                        .with_stock(-6.0)
-                        .with_list(Decimal::new(812, 2))
-                        .with_cost(Decimal::new(523, 2))
-                        .add_alt_sku("ALT SKU")
-                        .with_group('A')
-                        .unwrap()
-                        .with_last_sold("2019-05-28".parse().unwrap())
-                        .build()
-                        .unwrap()
-                )
-            ])
-        );
+        let known_customers = AbcCustomersByCode::from([
+            (
+                ".CASH".to_string(),
+                AbcCustomerBuilder::default()
+                    .code(".CASH")
+                    .name("Cash Sale")
+                    .address(None)
+                    .zip(None)
+                    .tax_code("PA")
+                    .tin(None)
+                    .email(Some("something@nothing.com".to_string()))
+                    .jdf_id(None)
+                    .terms("CASH")
+                    .build()
+                    .unwrap(),
+            ),
+            (
+                "SOMECODE".to_string(),
+                AbcCustomerBuilder::default()
+                    .code("SOMECODE")
+                    .name("SOME COMPANY")
+                    .address(Some("1119 CENTRE AVE".to_string()))
+                    .email(None)
+                    .zip(Some("19601".to_string()))
+                    .phone(["(123)456-7890".to_string()])
+                    .tax_code("PA/")
+                    .terms("NET 30")
+                    .tin(Some("123456789".to_string()))
+                    .jdf_id(None)
+                    .build()
+                    .unwrap(),
+            ),
+            (
+                "OTHERCODE".to_string(),
+                AbcCustomerBuilder::default()
+                    .code("OTHERCODE")
+                    .name("OTHER COMPANY")
+                    .address(Some("7180 BERNVILLE RD".to_string()))
+                    .zip(Some("19506".to_string()))
+                    .phone(["(987)654-3210".to_string(), "(123)456-7890".to_string()])
+                    .email(Some("ree@ree.ree".to_string()))
+                    .tax_code("PA")
+                    .terms("NET30")
+                    .tin(None)
+                    .jdf_id(None)
+                    .build()
+                    .unwrap(),
+            ),
+            (
+                "SURGI 0".to_string(),
+                AbcCustomerBuilder::default()
+                    .code("SURGI 0")
+                    .name("SURNAME, GIVENNAME")
+                    .address(Some("300 PENN VALLEY RD".to_string()))
+                    .zip(Some("19506".to_string()))
+                    .email(None)
+                    .phone(["(321)195-5731".to_string()])
+                    .tax_code("PA")
+                    .terms("CASH")
+                    .tin("123456789".to_string())
+                    .jdf_id(None)
+                    .build()
+                    .unwrap(),
+            ),
+        ]);
+        for (code, customer) in customers {
+            assert_eq!(&customer, known_customers.get(&code).unwrap());
+        }
     }
 }
