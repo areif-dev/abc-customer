@@ -1,6 +1,7 @@
+use csv::StringRecord;
 // https://apis.usps.com/addresses/v3/city-state
 use derive_builder::Builder;
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display, path::Path, str::FromStr};
 
 #[derive(Debug, Clone, PartialEq, Builder)]
 #[builder(setter(into))]
@@ -19,19 +20,18 @@ pub struct AbcCustomer {
 }
 
 #[derive(Debug)]
-pub enum ParseCustomerError {
-    /// An error caused by the csv parser.
-    CsvError(csv::Error),
-    /// A field required by [`AbcCustomer`] is missing from the csv file. Value 0 is the name of the
-    /// field that is missing. Value 1 is the row of the file that failed
-    MissingField(&'static str, usize),
-    /// Covers any additional errors that arise while parsing. Value 0 should be used to provide
-    /// context to the error such as the row that the error occurred on
-    Custom(String),
-    BuilderError(AbcCustomerBuilderError),
+pub enum AbcCustomerError {
+    BuilderError(AbcCustomerBuilderError, Context),
+    ParsePaymentTermsError(String, Context),
+    CsvError(csv::Error, Context),
 }
 
-pub type AbcCustomersByCode = HashMap<String, AbcCustomer>;
+pub trait WithContext<T> {
+    /// If `self` is `Ok`, returns the value unchanged.
+    /// If `self` is `Err`, appends `ctx` to the error’s internal `Context`
+    /// and returns the mutated error.
+    fn with_context(self, ctx: &str) -> Result<T, AbcCustomerError>;
+}
 
 impl AbcCustomer {
     /// Create a map of skus to [`AbcCustomer`]s by parsing ABC database export files.
@@ -144,30 +144,79 @@ impl AbcCustomer {
 }
 
 impl std::fmt::Display for ParseCustomerError {
+impl AbcCustomerError {
+    /// Prepend additional context to the error’s stored [`Context`].
+    ///
+    /// The new context is placed **before** the existing one and separated
+    /// by `" - "`, e.g. `"new" - "old"` -> `"new - old"`.
+    pub fn add_context(&mut self, context: &str) {
+        // Helper that prepends the new fragment to an existing `String`.
+        fn prepend(existing: &mut Context, new: &str) {
+            // If the existing context is empty we just replace it;
+            // otherwise we keep the separator.
+            if existing.is_empty() {
+                *existing = new.to_string();
+            } else {
+                let combined = format!("{} - {}", new, existing);
+                *existing = combined;
+            }
+        }
+
+        match self {
+            AbcCustomerError::BuilderError(_, ctx) => prepend(ctx, context),
+            AbcCustomerError::ParsePaymentTermsError(_, ctx) => prepend(ctx, context),
+            AbcCustomerError::CsvError(_, ctx) => prepend(ctx, context),
+        }
+    }
+}
+
+impl Display for AbcCustomerError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let inner_message = match self {
-            Self::MissingField(field, row) => {
-                format!("Missing required field `{}` in row {}", field, row)
+            Self::BuilderError(_, c) => {
+                format!("problem building customer info: {}", c)
             }
-            Self::CsvError(e) => format!("{}", e),
-            Self::BuilderError(e) => format!("{}", e),
-            Self::Custom(e) => format!("{}", e),
+            Self::ParsePaymentTermsError(_, c) => {
+                format!("problem parsing payment terms: {}", c)
+            }
+            Self::CsvError(_, c) => {
+                format!("problem parsing csv data: {}", c)
+            }
         };
-        write!(f, "Failed to parse Customer file due to {}", inner_message)
+        write!(f, "Error in AbcCustomer lib: {}", inner_message)
     }
 }
 
-impl std::error::Error for ParseCustomerError {}
+impl From<(AbcCustomerBuilderError, Context)> for AbcCustomerError {
+    fn from((inner, context): (AbcCustomerBuilderError, Context)) -> Self {
+        Self::BuilderError(inner, context)
+    }
+}
 
-impl From<csv::Error> for ParseCustomerError {
+impl From<(csv::Error, Context)> for AbcCustomerError {
+    fn from((inner, context): (csv::Error, Context)) -> Self {
+        Self::CsvError(inner, context)
+    }
+}
+
+impl From<csv::Error> for AbcCustomerError {
     fn from(value: csv::Error) -> Self {
-        Self::CsvError(value)
+        AbcCustomerError::CsvError(value, String::new())
     }
 }
 
-impl From<AbcCustomerBuilderError> for ParseCustomerError {
+impl From<AbcCustomerBuilderError> for AbcCustomerError {
     fn from(value: AbcCustomerBuilderError) -> Self {
-        Self::BuilderError(value)
+        AbcCustomerError::BuilderError(value, String::new())
+    }
+}
+
+impl<T> WithContext<T> for Result<T, AbcCustomerError> {
+    fn with_context(self, ctx: &str) -> Result<T, AbcCustomerError> {
+        self.map_err(|mut e| {
+            e.add_context(ctx);
+            e
+        })
     }
 }
 
