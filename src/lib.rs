@@ -13,11 +13,23 @@ pub struct AbcCustomer {
     email: Option<String>,
     #[builder(default = Vec::new())]
     phone: Vec<String>,
-    terms: String,
+    terms: PaymentTerms,
     tax_code: String,
     tin: Option<String>,
     jdf_id: Option<String>,
 }
+
+pub type AbcCustomersByCode = HashMap<String, AbcCustomer>;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum PaymentTerms {
+    /// Full payment is due at the time of product or service delivery
+    CashOnDelivery,
+    /// Full payment is due within the specified number of days from the date of the invoice
+    Net(u32),
+}
+
+pub type Context = String;
 
 #[derive(Debug)]
 pub enum AbcCustomerError {
@@ -53,23 +65,18 @@ impl AbcCustomer {
     /// The data files are long, and ABC does not always produce them correctly. Therefore, if any
     /// required fields are missing or if certain values cannot be parsed,
     /// then an [`ParseCustomerError`] will be returned
-    pub fn from_db_export(customer_path: &str) -> Result<AbcCustomersByCode, ParseCustomerError> {
-        let mut customer_data = csv::ReaderBuilder::new()
-            .delimiter(b'\t')
-            .has_headers(false)
-            .from_path(customer_path)?;
-
-        let mut i = 0;
-        let mut customers = HashMap::new();
-        while let Some(row) = customer_data.records().next() {
-            i += 1;
-            let row = row?;
-            let code = row
-                .get(0)
-                .ok_or(ParseCustomerError::MissingField("code", i))?;
-            let name = row
-                .get(1)
-                .ok_or(ParseCustomerError::MissingField("name", i))?;
+    pub fn from_db_export(
+        customer_path: impl AsRef<Path>,
+    ) -> Result<AbcCustomersByCode, AbcCustomerError> {
+        fn parse_record(row: StringRecord) -> Result<(String, AbcCustomer), AbcCustomerError> {
+            let code = row.get(0).ok_or((
+                AbcCustomerBuilderError::UninitializedField("code"),
+                format!("failed setting customer code. row is {:?}", row),
+            ))?;
+            let name = row.get(1).ok_or((
+                AbcCustomerBuilderError::UninitializedField("name"),
+                format!("failed setting customer name. row is {:?}", row),
+            ))?;
             let address = row.get(3).map_or(None, |a| {
                 if a.is_empty() {
                     None
@@ -94,6 +101,7 @@ impl AbcCustomer {
             let tax = row
                 .get(11)
                 .map_or("PA", |e| if e.is_empty() { "PA" } else { e });
+
             // Phone numbers may exist at any of indexes 7, 27, 34
             let phone: Vec<String> = [7usize, 27, 34]
                 .iter()
@@ -107,9 +115,11 @@ impl AbcCustomer {
                     })
                 })
                 .collect();
-            let terms = row
+            let terms: PaymentTerms = row
                 .get(15)
-                .map_or("CASH", |e| if e.is_empty() { "CASH" } else { e });
+                .unwrap_or("")
+                .parse()
+                .unwrap_or(PaymentTerms::CashOnDelivery);
             let tin = row.get(31).map_or(None, |e| {
                 if e.is_empty() {
                     None
@@ -125,25 +135,71 @@ impl AbcCustomer {
                 }
             });
 
-            let customer = AbcCustomerBuilder::default()
-                .code(code)
-                .name(name)
-                .address(address)
-                .zip(zip)
-                .email(email)
-                .phone(phone)
-                .terms(terms)
-                .tax_code(tax)
-                .jdf_id(jdf_id)
-                .tin(tin)
-                .build()?;
+            Ok((
+                code.to_owned(),
+                AbcCustomerBuilder::default()
+                    .code(code)
+                    .name(name)
+                    .address(address)
+                    .zip(zip)
+                    .email(email)
+                    .phone(phone)
+                    .terms(terms)
+                    .tax_code(tax)
+                    .jdf_id(jdf_id)
+                    .tin(tin)
+                    .build()?,
+            ))
+        }
+
+        let mut customer_data = csv::ReaderBuilder::new()
+            .delimiter(b'\t')
+            .has_headers(false)
+            .from_path(customer_path)
+            .map_err(|e| AbcCustomerError::from(e))
+            .with_context(&format!("customer.data file failed to open"))?;
+
+        let mut customers = HashMap::new();
+        for row in customer_data.records() {
+            let row = row?;
+            let (code, customer) = parse_record(row)?;
             customers.insert(code.to_string(), customer);
         }
         Ok(customers)
     }
 }
 
-impl std::fmt::Display for ParseCustomerError {
+impl FromStr for PaymentTerms {
+    type Err = AbcCustomerError;
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let lower = value.to_lowercase();
+        if lower.contains("cash") {
+            return Ok(PaymentTerms::CashOnDelivery);
+        }
+        if lower.contains("net") {
+            let days = lower
+                .chars()
+                .filter(|c| c.is_digit(10))
+                .collect::<String>()
+                .parse::<u32>()
+                .map_err(|e| {
+                    AbcCustomerError::ParsePaymentTermsError(
+                        e.to_string(),
+                        format!(
+                            "parsing payment terms failed. Net due days could not be read from {}",
+                            value
+                        ),
+                    )
+                })?;
+            return Ok(PaymentTerms::Net(days));
+        }
+        Err(AbcCustomerError::ParsePaymentTermsError(
+            format!("could not parse valid payment terms from {}", value),
+            format!("could not parse valid payment terms from {}", value),
+        ))
+    }
+}
+
 impl AbcCustomerError {
     /// Prepend additional context to the error’s stored [`Context`].
     ///
@@ -227,7 +283,7 @@ mod tests {
     #[test]
     fn test_parser() {
         let customer_path = "./customer.data";
-        let (customers, failed) = AbcCustomer::from_db_export(customer_path).unwrap();
+        let customers = AbcCustomer::from_db_export(customer_path).unwrap();
         let known_customers = AbcCustomersByCode::from([
             (
                 ".CASH".to_string(),
