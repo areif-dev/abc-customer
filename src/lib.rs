@@ -357,4 +357,27 @@ mod tests {
             assert_eq!(&customer, known_customers.get(&code).unwrap());
         }
     }
+
+    #[test]
+    fn test_add_context() {
+        let mut err = AbcCustomerError::ParsePaymentTermsError(String::new(), String::new());
+        err.add_context("test");
+        err.add_context("other test");
+        match &err {
+            AbcCustomerError::ParsePaymentTermsError(_, c) => {
+                assert_eq!(c.to_string(), String::from("other test - test"));
+            }
+            _ => panic!("Expected error type to be AbcCustomerError::ParsePaymentTermsError"),
+        }
+        assert_eq!(
+            err.to_string(),
+            String::from(
+                "Error in AbcCustomer lib: problem parsing payment terms: other test - test"
+            )
+        );
+        assert_eq!(
+            format!("{:?}", err),
+            String::from("ParsePaymentTermsError(\"\", \"other test - test\")")
+        );
+    }
 }
