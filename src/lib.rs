@@ -245,13 +245,17 @@ impl Display for AbcCustomerError {
 
 impl From<(AbcCustomerBuilderError, Context)> for AbcCustomerError {
     fn from((inner, context): (AbcCustomerBuilderError, Context)) -> Self {
-        Self::BuilderError(inner, context)
+        let mut err = Self::BuilderError(inner, String::new());
+        err.add_context(&context);
+        err
     }
 }
 
 impl From<(csv::Error, Context)> for AbcCustomerError {
     fn from((inner, context): (csv::Error, Context)) -> Self {
-        Self::CsvError(inner, context)
+        let mut err = Self::CsvError(inner, String::new());
+        err.add_context(&context);
+        err
     }
 }
 
