@@ -4,91 +4,46 @@ use csv::StringRecord;
 
 use crate::AbcCustomerBuilderError;
 
-pub type Context = String;
-
-pub struct Error {
-    kind: ErrorKind,
-    context: Vec<Context>,
-}
-
+/// General purpose type for handling errors that arise in relation to processing [`crate::AbcCustomer`]s
 #[derive(Debug)]
-pub enum ErrorKind {
+pub enum Error {
+    /// Occurs when building a [`crate::AbcCustomer`] fails. Forwards the underlying error as well
+    /// as the record that caused the error
     BuilderError {
         inner: AbcCustomerBuilderError,
-        record: &'static str,
+        record: StringRecord,
     },
-    ParsePaymentTermsError(Context),
-    CsvError(csv::Error),
-}
-
-pub trait AddContext<T> {
-    /// If `self` is `Ok`, returns the value unchanged.
-    /// If `self` is `Err`, appends `ctx` to the error’s internal `Context`
-    /// and returns the mutated error.
-    fn add_context(self, ctx: &str) -> Result<T, Error>;
-}
-
-impl Error {
-    fn add_context(self, ctx: &str) -> Error {
-        let mut existing = self.context.clone();
-        existing.push(ctx.to_string());
-        Self {
-            context: existing,
-            ..self
-        }
-    }
+    /// Could not read valid [`crate::PaymentTerms`] from a given string. Includes context around
+    /// what happened
+    ParsePaymentTermsError(String),
+    /// Reading the customer.data file failed for some reason. Forwards the underlying error as
+    /// well as a string with additional context
+    CsvError(csv::Error, &'static str),
 }
 
 impl std::error::Error for Error {}
 
-impl Debug for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self)
-    }
-}
-
 impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut context = self.context.clone();
-        context.reverse();
-        let context = if context.is_empty() {
-            String::from("no context")
-        } else {
-            context.join(" -> ")
+        let inner = match self {
+            Self::CsvError(e, c) => format!("{e}. Context: {c}"),
+            Self::BuilderError { inner, record } => {
+                format!("{:?} failed to parse due to {inner}", record)
+            }
+            Self::ParsePaymentTermsError(c) => format!("can't parse payment terms due to {c}"),
         };
-        write!(f, "{context}")
+        write!(f, "problem with AbcCustomer lib. Context: {inner}")
     }
 }
 
-impl From<csv::Error> for Error {
-    fn from(value: csv::Error) -> Self {
-        Error {
-            context: vec![format!("{:?}", value)],
-            kind: ErrorKind::CsvError(value),
-        }
+impl From<(csv::Error, &'static str)> for Error {
+    fn from((inner, ctx): (csv::Error, &'static str)) -> Self {
+        Error::CsvError(inner, ctx)
     }
 }
 
-impl From<AbcCustomerBuilderError> for Error {
-    fn from(value: AbcCustomerBuilderError) -> Self {
-        Error {
-            context: vec![format!("{:?}", value)],
-            kind: ErrorKind::BuilderError(value),
-        }
-    }
-}
-
-impl From<(AbcCustomerBuilderError, &'static str)> for Error {
-    fn from(value: (AbcCustomerBuilderError, &'static str)) -> Self {
-        Error
-    }
-}
-
-impl<T> AddContext<T> for Result<T, Error> {
-    fn add_context(self, ctx: &str) -> Result<T, Error> {
-        match self {
-            Ok(d) => Ok(d),
-            Err(e) => Err(e.add_context(ctx)),
-        }
+impl From<(AbcCustomerBuilderError, StringRecord)> for Error {
+    fn from((inner, record): (AbcCustomerBuilderError, StringRecord)) -> Self {
+        Error::BuilderError { inner, record }
     }
 }

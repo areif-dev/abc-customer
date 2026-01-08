@@ -1,7 +1,9 @@
+pub mod error;
+
 use csv::StringRecord;
-// https://apis.usps.com/addresses/v3/city-state
 use derive_builder::Builder;
-use std::{collections::HashMap, fmt::Display, path::Path, str::FromStr};
+pub use error::Error;
+use std::{collections::HashMap, path::Path, str::FromStr};
 
 #[derive(Debug, Clone, PartialEq, Builder)]
 #[builder(setter(into))]
@@ -29,22 +31,6 @@ pub enum PaymentTerms {
     Net(u32),
 }
 
-pub type Context = String;
-
-#[derive(Debug)]
-pub enum AbcCustomerError {
-    BuilderError(AbcCustomerBuilderError, Context),
-    ParsePaymentTermsError(String, Context),
-    CsvError(csv::Error, Context),
-}
-
-pub trait WithContext<T> {
-    /// If `self` is `Ok`, returns the value unchanged.
-    /// If `self` is `Err`, appends `ctx` to the error’s internal `Context`
-    /// and returns the mutated error.
-    fn with_context(self, ctx: &str) -> Result<T, AbcCustomerError>;
-}
-
 impl AbcCustomer {
     /// Create a map of skus to [`AbcCustomer`]s by parsing ABC database export files.
     ///
@@ -65,17 +51,15 @@ impl AbcCustomer {
     /// The data files are long, and ABC does not always produce them correctly. Therefore, if any
     /// required fields are missing or if certain values cannot be parsed,
     /// then an [`ParseCustomerError`] will be returned
-    pub fn from_db_export(
-        customer_path: impl AsRef<Path>,
-    ) -> Result<AbcCustomersByCode, AbcCustomerError> {
-        fn parse_record(row: StringRecord) -> Result<(String, AbcCustomer), AbcCustomerError> {
+    pub fn from_db_export(customer_path: impl AsRef<Path>) -> Result<AbcCustomersByCode, Error> {
+        fn parse_record(row: StringRecord) -> Result<(String, AbcCustomer), Error> {
             let code = row.get(0).ok_or((
                 AbcCustomerBuilderError::UninitializedField("code"),
-                format!("failed setting customer code. row is {:?}", row),
+                row.clone(),
             ))?;
             let name = row.get(1).ok_or((
                 AbcCustomerBuilderError::UninitializedField("name"),
-                format!("failed setting customer name. row is {:?}", row),
+                row.clone(),
             ))?;
             let address = row.get(3).map_or(None, |a| {
                 if a.is_empty() {
@@ -148,7 +132,8 @@ impl AbcCustomer {
                     .tax_code(tax)
                     .jdf_id(jdf_id)
                     .tin(tin)
-                    .build()?,
+                    .build()
+                    .map_err(|e| (e, row))?,
             ))
         }
 
@@ -156,12 +141,16 @@ impl AbcCustomer {
             .delimiter(b'\t')
             .has_headers(false)
             .from_path(customer_path)
-            .map_err(|e| AbcCustomerError::from(e))
-            .with_context(&format!("customer.data file failed to open"))?;
+            .map_err(|e| (e, "failed to open customer.data file"))?;
 
         let mut customers = HashMap::new();
         for row in customer_data.records() {
-            let row = row?;
+            let row = row.map_err(|e| {
+                (
+                    e,
+                    "customer.data opened successfully, but could not read a particular record",
+                )
+            })?;
             let (code, customer) = parse_record(row)?;
             customers.insert(code.to_string(), customer);
         }
@@ -170,7 +159,7 @@ impl AbcCustomer {
 }
 
 impl FromStr for PaymentTerms {
-    type Err = AbcCustomerError;
+    type Err = Error;
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let lower = value.to_lowercase();
         if lower.contains("cash") {
@@ -183,100 +172,17 @@ impl FromStr for PaymentTerms {
                 .collect::<String>()
                 .parse::<u32>()
                 .map_err(|e| {
-                    AbcCustomerError::ParsePaymentTermsError(
-                        e.to_string(),
+                    Error::ParsePaymentTermsError(
                         format!(
-                            "parsing payment terms failed. Net due days could not be read from {}",
-                            value
+                            "parsing payment terms failed. Net due days could not be read from {value}. Caused by {e}",
                         ),
                     )
                 })?;
             return Ok(PaymentTerms::Net(days));
         }
-        Err(AbcCustomerError::ParsePaymentTermsError(
-            format!("could not parse valid payment terms from {}", value),
-            format!("could not parse valid payment terms from {}", value),
-        ))
-    }
-}
-
-impl AbcCustomerError {
-    /// Prepend additional context to the error’s stored [`Context`].
-    ///
-    /// The new context is placed **before** the existing one and separated
-    /// by `" - "`, e.g. `"new" - "old"` -> `"new - old"`.
-    pub fn add_context(&mut self, context: &str) {
-        // Helper that prepends the new fragment to an existing `String`.
-        fn prepend(existing: &mut Context, new: &str) {
-            // If the existing context is empty we just replace it;
-            // otherwise we keep the separator.
-            if existing.is_empty() {
-                *existing = new.to_string();
-            } else {
-                let combined = format!("{} - {}", new, existing);
-                *existing = combined;
-            }
-        }
-
-        match self {
-            AbcCustomerError::BuilderError(_, ctx) => prepend(ctx, context),
-            AbcCustomerError::ParsePaymentTermsError(_, ctx) => prepend(ctx, context),
-            AbcCustomerError::CsvError(_, ctx) => prepend(ctx, context),
-        }
-    }
-}
-
-impl Display for AbcCustomerError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let inner_message = match self {
-            Self::BuilderError(_, c) => {
-                format!("problem building customer info: {}", c)
-            }
-            Self::ParsePaymentTermsError(_, c) => {
-                format!("problem parsing payment terms: {}", c)
-            }
-            Self::CsvError(_, c) => {
-                format!("problem parsing csv data: {}", c)
-            }
-        };
-        write!(f, "Error in AbcCustomer lib: {}", inner_message)
-    }
-}
-
-impl From<(AbcCustomerBuilderError, Context)> for AbcCustomerError {
-    fn from((inner, context): (AbcCustomerBuilderError, Context)) -> Self {
-        let mut err = Self::BuilderError(inner, String::new());
-        err.add_context(&context);
-        err
-    }
-}
-
-impl From<(csv::Error, Context)> for AbcCustomerError {
-    fn from((inner, context): (csv::Error, Context)) -> Self {
-        let mut err = Self::CsvError(inner, String::new());
-        err.add_context(&context);
-        err
-    }
-}
-
-impl From<csv::Error> for AbcCustomerError {
-    fn from(value: csv::Error) -> Self {
-        AbcCustomerError::CsvError(value, String::new())
-    }
-}
-
-impl From<AbcCustomerBuilderError> for AbcCustomerError {
-    fn from(value: AbcCustomerBuilderError) -> Self {
-        AbcCustomerError::BuilderError(value, String::new())
-    }
-}
-
-impl<T> WithContext<T> for Result<T, AbcCustomerError> {
-    fn with_context(self, ctx: &str) -> Result<T, AbcCustomerError> {
-        self.map_err(|mut e| {
-            e.add_context(ctx);
-            e
-        })
+        Err(Error::ParsePaymentTermsError(format!(
+            "could not parse valid payment terms from {value}",
+        )))
     }
 }
 
@@ -356,28 +262,5 @@ mod tests {
         for (code, customer) in customers {
             assert_eq!(&customer, known_customers.get(&code).unwrap());
         }
-    }
-
-    #[test]
-    fn test_add_context() {
-        let mut err = AbcCustomerError::ParsePaymentTermsError(String::new(), String::new());
-        err.add_context("test");
-        err.add_context("other test");
-        match &err {
-            AbcCustomerError::ParsePaymentTermsError(_, c) => {
-                assert_eq!(c.to_string(), String::from("other test - test"));
-            }
-            _ => panic!("Expected error type to be AbcCustomerError::ParsePaymentTermsError"),
-        }
-        assert_eq!(
-            err.to_string(),
-            String::from(
-                "Error in AbcCustomer lib: problem parsing payment terms: other test - test"
-            )
-        );
-        assert_eq!(
-            format!("{:?}", err),
-            String::from("ParsePaymentTermsError(\"\", \"other test - test\")")
-        );
     }
 }
