@@ -23,7 +23,7 @@ pub struct AbcCustomer {
 
 pub type AbcCustomersByCode = HashMap<String, AbcCustomer>;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Copy)]
 pub enum PaymentTerms {
     /// Full payment is due at the time of product or service delivery
     CashOnDelivery,
@@ -32,6 +32,46 @@ pub enum PaymentTerms {
 }
 
 impl AbcCustomer {
+    pub fn code(&self) -> String {
+        self.code.to_string()
+    }
+
+    pub fn name(&self) -> String {
+        self.name.to_string()
+    }
+
+    pub fn address(&self) -> Option<String> {
+        self.address.to_owned()
+    }
+
+    pub fn zip(&self) -> Option<String> {
+        self.zip.to_owned()
+    }
+
+    pub fn email(&self) -> Option<String> {
+        self.email.to_owned()
+    }
+
+    pub fn phone(&self) -> Vec<String> {
+        self.phone.to_owned()
+    }
+
+    pub fn terms(&self) -> PaymentTerms {
+        self.terms
+    }
+
+    pub fn tax_code(&self) -> String {
+        self.tax_code.to_string()
+    }
+
+    pub fn tin(&self) -> Option<String> {
+        self.tin.to_owned()
+    }
+
+    pub fn jdf_id(&self) -> Option<String> {
+        self.jdf_id.to_owned()
+    }
+
     /// Create a map of skus to [`AbcCustomer`]s by parsing ABC database export files.
     ///
     /// In order to run a database export, run report 7-10, select "C" (Customer) as the file to export. All
