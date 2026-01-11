@@ -36,8 +36,44 @@ impl AbcCustomer {
         self.code.to_string()
     }
 
-    pub fn name(&self) -> String {
+    pub fn full_name(&self) -> String {
         self.name.to_string()
+    }
+
+    pub fn first_name(&self) -> Option<String> {
+        if self.name.contains(",") {
+            let split = self
+                .name
+                .split(",")
+                .map(str::trim)
+                .map(str::to_string)
+                .collect::<Vec<String>>();
+            let first_name = split.into_iter().rev().next()?;
+            if first_name.is_empty() {
+                return None;
+            }
+            return Some(first_name);
+        }
+        None
+    }
+
+    pub fn last_name(&self) -> Option<String> {
+        if self.name.contains(",") {
+            let mut split = self.name.split(",").map(str::trim).map(str::to_string);
+            let last_name = split.next()?;
+            if last_name.is_empty() {
+                return None;
+            }
+            return Some(last_name);
+        }
+        None
+    }
+
+    pub fn company_name(&self) -> Option<String> {
+        if !self.name.contains(",") {
+            return Some(self.name.to_owned());
+        }
+        None
     }
 
     pub fn address(&self) -> Option<String> {
