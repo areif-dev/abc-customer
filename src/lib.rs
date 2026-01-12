@@ -32,6 +32,32 @@ pub enum PaymentTerms {
 }
 
 impl AbcCustomer {
+    fn first_and_last_names(full_name: &str) -> (String, String) {
+        let name_in_order = if full_name.contains(",") {
+            let mut comma_split: Vec<String> = full_name
+                .split(",")
+                .filter_map(|n| {
+                    if n.trim().is_empty() {
+                        None
+                    } else {
+                        Some(n.trim().to_string())
+                    }
+                })
+                .collect();
+            comma_split.reverse();
+            comma_split.join(" ")
+        } else {
+            full_name.to_string()
+        };
+        let mut space_split = name_in_order.split(" ");
+        let first_name = space_split.next().unwrap_or("").to_string();
+        let last_name = space_split.collect::<Vec<_>>().join(" ");
+        match (first_name.is_empty(), last_name.is_empty()) {
+            (true, true) => (String::new(), String::from("Receiving")),
+            _ => (first_name, last_name),
+        }
+    }
+
     pub fn code(&self) -> String {
         self.code.to_string()
     }
@@ -40,40 +66,14 @@ impl AbcCustomer {
         self.name.to_string()
     }
 
-    pub fn first_name(&self) -> Option<String> {
-        if self.name.contains(",") {
-            let split = self
-                .name
-                .split(",")
-                .map(str::trim)
-                .map(str::to_string)
-                .collect::<Vec<String>>();
-            let first_name = split.into_iter().rev().next()?;
-            if first_name.is_empty() {
-                return None;
-            }
-            return Some(first_name);
-        }
-        None
+    pub fn first_name(&self) -> String {
+        let (first, _) = Self::first_and_last_names(&self.name);
+        first
     }
 
-    pub fn last_name(&self) -> Option<String> {
-        if self.name.contains(",") {
-            let mut split = self.name.split(",").map(str::trim).map(str::to_string);
-            let last_name = split.next()?;
-            if last_name.is_empty() {
-                return None;
-            }
-            return Some(last_name);
-        }
-        None
-    }
-
-    pub fn company_name(&self) -> Option<String> {
-        if !self.name.contains(",") {
-            return Some(self.name.to_owned());
-        }
-        None
+    pub fn last_name(&self) -> String {
+        let (_, last) = Self::first_and_last_names(&self.name);
+        last
     }
 
     pub fn address(&self) -> Option<String> {
@@ -338,5 +338,44 @@ mod tests {
         for (code, customer) in customers {
             assert_eq!(&customer, known_customers.get(&code).unwrap());
         }
+    }
+
+    #[test]
+    fn test_first_and_last_names() {
+        let names = [
+            "SURNAME, GIVENNAME",
+            "SURNAME,GIVENNAME",
+            "JUSTONENAME",
+            "",
+            "Company Name",
+            "Givenname Surname",
+            "This Has Many Names",
+            "Surname, Givenname Middlename",
+            "Surname, Givenname, Bull",
+            "strayComma,",
+        ];
+        let mapped: Vec<(String, String)> = names
+            .into_iter()
+            .map(AbcCustomer::first_and_last_names)
+            .collect();
+        let expected = [
+            ("GIVENNAME", "SURNAME"),
+            ("GIVENNAME", "SURNAME"),
+            ("JUSTONENAME", ""),
+            ("", "Receiving"),
+            ("Company", "Name"),
+            ("Givenname", "Surname"),
+            ("This", "Has Many Names"),
+            ("Givenname", "Middlename Surname"),
+            ("Bull", "Givenname Surname"),
+            ("strayComma", ""),
+        ];
+        assert_eq!(
+            mapped,
+            expected
+                .into_iter()
+                .map(|(a, b)| (a.to_string(), b.to_string()))
+                .collect::<Vec<_>>()
+        );
     }
 }
