@@ -1,9 +1,12 @@
+pub mod email;
 pub mod error;
 
 use csv::StringRecord;
 use derive_builder::Builder;
 pub use error::Error;
 use std::{collections::HashMap, path::Path, str::FromStr};
+
+use crate::email::EmailSettings;
 
 #[derive(Debug, Clone, PartialEq, Builder)]
 #[builder(setter(into))]
@@ -12,7 +15,7 @@ pub struct AbcCustomer {
     name: String,
     address: Option<String>,
     zip: Option<String>,
-    email: Option<String>,
+    email: Option<EmailSettings>,
     #[builder(default = Vec::new())]
     phone: Vec<String>,
     terms: PaymentTerms,
@@ -151,13 +154,9 @@ impl AbcCustomer {
                     Some(z.to_string())
                 }
             });
-            let email = row.get(6).map_or(None, |e| {
-                if e.is_empty() {
-                    None
-                } else {
-                    Some(e.to_string())
-                }
-            });
+            let email = row
+                .get(6)
+                .map_or(None, |e| EmailSettings::parse_from_str(e));
             let tax = row
                 .get(11)
                 .map_or("PA", |e| if e.is_empty() { "PA" } else { e });
@@ -264,6 +263,8 @@ impl FromStr for PaymentTerms {
 
 #[cfg(test)]
 mod tests {
+    use crate::email::{EmailSettingsBuilder, Frequency};
+
     use super::*;
 
     #[test]
@@ -280,7 +281,13 @@ mod tests {
                     .zip(None)
                     .tax_code("PA")
                     .tin(None)
-                    .email(Some("something@nothing.com".to_string()))
+                    .email(
+                        EmailSettingsBuilder::default()
+                            .email("something@nothing.com")
+                            .frequency(Frequency::Never)
+                            .build()
+                            .unwrap(),
+                    )
                     .jdf_id(None)
                     .terms("CASH".parse::<PaymentTerms>().unwrap())
                     .build()
@@ -310,7 +317,13 @@ mod tests {
                     .address(Some("7180 BERNVILLE RD".to_string()))
                     .zip(Some("19506".to_string()))
                     .phone(["(987)654-3210".to_string(), "(123)456-7890".to_string()])
-                    .email(Some("ree@ree.ree".to_string()))
+                    .email(
+                        EmailSettingsBuilder::default()
+                            .email("ree@ree.ree")
+                            .frequency(Frequency::Never)
+                            .build()
+                            .unwrap(),
+                    )
                     .tax_code("PA")
                     .terms("NET30".parse::<PaymentTerms>().unwrap())
                     .tin(None)
@@ -330,6 +343,29 @@ mod tests {
                     .tax_code("PA")
                     .terms("CASH".parse::<PaymentTerms>().unwrap())
                     .tin("123456789".to_string())
+                    .jdf_id(None)
+                    .build()
+                    .unwrap(),
+            ),
+            (
+                "REEEEEEEE".to_string(),
+                AbcCustomerBuilder::default()
+                    .code("REEEEEEEE")
+                    .name("REEEE COMPANY")
+                    .address(Some("7180 BERNVILLE RD".to_string()))
+                    .zip(Some("19506".to_string()))
+                    .email(
+                        EmailSettingsBuilder::default()
+                            .email("something@nothing.com")
+                            .frequency(Frequency::Daily(email::InvoicesToSend::All))
+                            .send_zero_balance_statements(true)
+                            .build()
+                            .unwrap(),
+                    )
+                    .phone(["(987)654-3210".to_string(), "(123)456-7890".to_string()])
+                    .tax_code("PA")
+                    .terms("NET30".parse::<PaymentTerms>().unwrap())
+                    .tin(None)
                     .jdf_id(None)
                     .build()
                     .unwrap(),
