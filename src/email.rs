@@ -1,6 +1,7 @@
 use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 
+/// How often customers should receive billing emails
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub enum Frequency {
     /// Only send daily invoices. No monthly statement
@@ -13,6 +14,7 @@ pub enum Frequency {
     Never,
 }
 
+/// Which invoices to email to the customer
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub enum InvoicesToSend {
     /// Send all invoices regardless of payment status
@@ -23,6 +25,8 @@ pub enum InvoicesToSend {
     Paid,
 }
 
+/// Defines customer email preferences; such as email address, frequency of billing emails, and
+/// whether they are to receive an emailed statement regardless of their ending balance
 #[derive(Debug, Builder, Clone, PartialEq, Deserialize, Serialize)]
 #[builder(setter(strip_option, into), pattern = "owned")]
 pub struct EmailSettings {
