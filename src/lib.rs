@@ -61,28 +61,38 @@ impl AbcCustomer {
         }
     }
 
+    /// Get the ID of the [`AbcCustomer`]. Something like "DOEJO 0"
     pub fn code(&self) -> String {
         self.code.to_string()
     }
 
+    /// The full name as it appears in ABC. A person will be something like "DOE, JOHN". A company
+    /// should be "JOHN DOE, INC"
     pub fn full_name(&self) -> String {
         self.name.to_string()
     }
 
+    /// Parses the customer's name and returns only the "first" name. For a person like "DOE,
+    /// JOHN", this will return "JOHN". For a company like "JOHN DOE, INC.", this will return
+    /// "INC."
     pub fn first_name(&self) -> String {
         let (first, _) = Self::first_and_last_names(&self.name);
         first
     }
 
+    /// Parses the customer's name and returns only the "last" name. For a person like "DOE, JOHN",
+    /// this will return "DOE". For a company like "JOHN DOE, INC.", this will return "JOHN DOE"
     pub fn last_name(&self) -> String {
         let (_, last) = Self::first_and_last_names(&self.name);
         last
     }
 
+    /// The customer's billing address including building number and street name
     pub fn address(&self) -> Option<String> {
         self.address.to_owned()
     }
 
+    /// The customer's billing zip code
     pub fn zip(&self) -> Option<String> {
         self.zip.to_owned()
     }
@@ -92,22 +102,27 @@ impl AbcCustomer {
         self.email.to_owned()
     }
 
+    /// List of phone numbers associated with the customer
     pub fn phone(&self) -> Vec<String> {
         self.phone.to_owned()
     }
 
+    /// Default payment terms on the customer's account
     pub fn terms(&self) -> PaymentTerms {
         self.terms
     }
 
+    /// Customer's default tax code
     pub fn tax_code(&self) -> String {
         self.tax_code.to_string()
     }
 
+    /// Customer's tax id number (if present)
     pub fn tin(&self) -> Option<String> {
         self.tin.to_owned()
     }
 
+    /// Customer's John Deere Financial id number (if present)
     pub fn jdf_id(&self) -> Option<String> {
         self.jdf_id.to_owned()
     }
