@@ -40,6 +40,34 @@ pub struct EmailSettings {
 }
 
 impl EmailSettings {
+    /// Get the email address
+    pub fn email(&self) -> String {
+        self.email.to_string()
+    }
+
+    /// Get the frequency at which to send email invoices
+    pub fn frequency(&self) -> Frequency {
+        self.frequency.clone()
+    }
+
+    /// - `true` if the customer should be emailed a monthly statement even if their account balance
+    /// is zero
+    /// - `false` if the customer should not be emailed a monthly statement when their account
+    /// balance is zero
+    pub fn send_zero_balance_statements(&self) -> bool {
+        self.send_zero_balance_statements
+    }
+
+    /// Attempt to parse a [`EmailSettings`] from a string
+    ///
+    /// # Arguments
+    /// - `raw` String to parse. Should be a json formatted string in the form of { "email":
+    /// string, frequency: { "Daily": { "All" | "Due" | "Paid" } | "Monthly" |
+    /// "MonthlyAndDaily": { "All" | "Due" | "Paid" } } }
+    ///
+    /// # Returns
+    /// - [`Some`] if `raw` is a well formed json string that could be deserialized into [`EmailSettings`]
+    /// - [`None`] if `raw` could not be parsed into [`EmailSettings`]
     pub fn parse_from_str(raw: &str) -> Option<EmailSettings> {
         let raw = raw.trim();
         if raw.is_empty() {
