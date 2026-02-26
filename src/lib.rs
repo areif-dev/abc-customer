@@ -87,7 +87,8 @@ impl AbcCustomer {
         self.zip.to_owned()
     }
 
-    pub fn email(&self) -> Option<String> {
+    /// Object describing the customer's invoice emailing preferences (if present)
+    pub fn email(&self) -> Option<EmailSettings> {
         self.email.to_owned()
     }
 
