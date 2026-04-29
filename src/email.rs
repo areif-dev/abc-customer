@@ -40,6 +40,21 @@ pub struct EmailSettings {
 }
 
 impl EmailSettings {
+    /// Change the email address
+    pub fn with_email(&mut self, email: &str) {
+        self.email = email.to_string();
+    }
+
+    /// Change how frequently invoice emails are sent
+    pub fn with_frequency(&mut self, freq: Frequency) {
+        self.frequency = freq;
+    }
+
+    /// Change whether to send the customer a statement even if their balance is zero
+    pub fn with_send_zero_balance_statements(&mut self, send_zero_balance_statements: bool) {
+        self.send_zero_balance_statements = send_zero_balance_statements;
+    }
+
     /// Get the email address
     pub fn email(&self) -> String {
         self.email.to_string()
