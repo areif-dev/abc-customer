@@ -127,6 +127,56 @@ impl AbcCustomer {
         self.jdf_id.to_owned()
     }
 
+    /// Set the ID of the [`AbcCustomer`].
+    pub fn set_code(&mut self, code: impl Into<String>) {
+        self.code = code.into();
+    }
+
+    /// Set the full name of the [`AbcCustomer`].
+    pub fn set_name(&mut self, name: impl Into<String>) {
+        self.name = name.into();
+    }
+
+    /// Set the customer's billing address.
+    pub fn set_address(&mut self, address: impl Into<Option<String>>) {
+        self.address = address.into();
+    }
+
+    /// Set the customer's billing zip code.
+    pub fn set_zip(&mut self, zip: impl Into<Option<String>>) {
+        self.zip = zip.into();
+    }
+
+    /// Set the customer's invoice emailing preferences.
+    pub fn set_email(&mut self, email: impl Into<Option<EmailSettings>>) {
+        self.email = email.into();
+    }
+
+    /// Set the list of phone numbers associated with the customer.
+    pub fn set_phone(&mut self, phone: impl Into<Vec<String>>) {
+        self.phone = phone.into();
+    }
+
+    /// Set the default payment terms on the customer's account.
+    pub fn set_terms(&mut self, terms: PaymentTerms) {
+        self.terms = terms;
+    }
+
+    /// Set the customer's default tax code.
+    pub fn set_tax_code(&mut self, tax_code: impl Into<String>) {
+        self.tax_code = tax_code.into();
+    }
+
+    /// Set the customer's tax id number.
+    pub fn set_tin(&mut self, tin: impl Into<Option<String>>) {
+        self.tin = tin.into();
+    }
+
+    /// Set the customer's John Deere Financial id number.
+    pub fn set_jdf_id(&mut self, jdf_id: impl Into<Option<String>>) {
+        self.jdf_id = jdf_id.into();
+    }
+
     /// Create a map of skus to [`AbcCustomer`]s by parsing ABC database export files.
     ///
     /// In order to run a database export, run report 7-10, select "C" (Customer) as the file to export. All
