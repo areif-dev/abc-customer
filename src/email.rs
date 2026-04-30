@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 
@@ -72,32 +74,22 @@ impl EmailSettings {
     pub fn send_zero_balance_statements(&self) -> bool {
         self.send_zero_balance_statements
     }
+}
 
-    /// Attempt to parse a [`EmailSettings`] from a string
-    ///
-    /// # Arguments
-    /// - `raw` String to parse. Should be a json formatted string in the form of { "email":
-    /// string, frequency: { "Daily": { "All" | "Due" | "Paid" } | "Monthly" |
-    /// "MonthlyAndDaily": { "All" | "Due" | "Paid" } } }
-    ///
-    /// # Returns
-    /// - [`Some`] if `raw` is a well formed json string that could be deserialized into [`EmailSettings`]
-    /// - [`None`] if `raw` could not be parsed into [`EmailSettings`]
-    pub fn parse_from_str(raw: &str) -> Option<EmailSettings> {
+impl FromStr for EmailSettings {
+    type Err = EmailSettingsBuilderError;
+    fn from_str(raw: &str) -> Result<Self, Self::Err> {
         let raw = raw.trim();
         if raw.is_empty() {
-            return None;
+            return Err(EmailSettingsBuilderError::UninitializedField("email"));
         }
         let Ok(settings) = serde_json::from_str::<EmailSettings>(raw) else {
-            return Some(
-                EmailSettingsBuilder::default()
-                    .email(raw)
-                    .frequency(Frequency::Never)
-                    .build()
-                    .ok()?,
-            );
+            return Ok(EmailSettingsBuilder::default()
+                .email(raw)
+                .frequency(Frequency::Never)
+                .build()?);
         };
-        Some(settings)
+        Ok(settings)
     }
 }
 
@@ -155,7 +147,7 @@ mod tests {
             .unwrap()
             .iter()
             .map(Value::to_string)
-            .map(|s| EmailSettings::parse_from_str(&s).unwrap())
+            .map(|s| EmailSettings::from_str(&s).unwrap())
             .collect::<Vec<_>>();
         let check_settings = json
             .as_array()
@@ -165,15 +157,15 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(settings, check_settings);
 
-        assert_eq!(EmailSettings::parse_from_str(""), None);
-        assert_eq!(EmailSettings::parse_from_str(" "), None);
+        assert!(EmailSettings::from_str("").is_err(),);
+        assert!(EmailSettings::from_str(" ").is_err(),);
         assert_eq!(
-            EmailSettings::parse_from_str("a"),
-            Some(EmailSettings {
+            EmailSettings::from_str("a").unwrap(),
+            EmailSettings {
                 email: "a".to_string(),
                 frequency: Frequency::Never,
                 send_zero_balance_statements: false
-            })
+            }
         );
     }
 }

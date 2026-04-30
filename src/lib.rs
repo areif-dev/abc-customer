@@ -220,9 +220,7 @@ impl AbcCustomer {
                     Some(z.to_string())
                 }
             });
-            let email = row
-                .get(6)
-                .map_or(None, |e| EmailSettings::parse_from_str(e));
+            let email = row.get(6).map_or(None, |e| EmailSettings::from_str(e).ok());
             let tax = row
                 .get(11)
                 .map_or("PA", |e| if e.is_empty() { "PA" } else { e });
